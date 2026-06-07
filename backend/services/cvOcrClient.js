@@ -17,7 +17,7 @@ async function detectAndOcr(filePath, originalName) {
     headers: form.getHeaders(),
     maxBodyLength: Infinity,
     maxContentLength: Infinity,
-    timeout: 120000,
+    timeout: 180000,
   });
   return data; // { pages, cards: [...] }
 }

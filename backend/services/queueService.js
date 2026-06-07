@@ -77,6 +77,23 @@ function getQueue() {
   return queue;
 }
 
+// Serial fallback queue — processes one upload at a time to avoid overwhelming OCR
+const _fallbackQueue = [];
+let _processingFallback = false;
+
+async function _processNext() {
+  if (_processingFallback || _fallbackQueue.length === 0) return;
+  _processingFallback = true;
+  const uploadId = _fallbackQueue.shift();
+  try {
+    await processUpload(uploadId);
+  } catch (err) {
+    console.error(`[Queue] In-process fallback failed for ${uploadId}:`, err.message);
+  }
+  _processingFallback = false;
+  _processNext();
+}
+
 /**
  * Enqueue an upload for background processing.
  * Falls back to direct in-process execution if Redis is not available.
@@ -96,12 +113,9 @@ async function enqueueUpload(uploadId) {
     }
   }
 
-  // Fallback: run in background (fire-and-forget, no retry)
-  setImmediate(() => {
-    processUpload(uploadId).catch((err) => {
-      console.error(`[Queue] In-process fallback failed for ${uploadId}:`, err.message);
-    });
-  });
+  // Fallback: process one at a time to avoid overwhelming the OCR service
+  _fallbackQueue.push(uploadId);
+  _processNext();
 
   return { jobId: null, fallback: true };
 }
