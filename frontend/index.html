@@ -253,10 +253,67 @@ body{font-family:var(--sans);background:var(--bg);color:var(--w1);height:100%;ov
 .hidden{display:none!important}
 .spin-anim{animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── MOBILE HAMBURGER ── */
+.mob-toggle{display:none;position:fixed;top:14px;left:14px;z-index:100;width:36px;height:36px;border-radius:var(--r);background:var(--card);border:1px solid var(--bdr);color:var(--w1);font-size:16px;cursor:pointer;align-items:center;justify-content:center;transition:var(--t);font-family:var(--sans)}
+.mob-toggle:hover{border-color:var(--bdr2);color:var(--teal)}
+.sidebar-overlay{display:none}
+.sidebar.open{transform:translateX(0)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .mob-toggle{display:flex}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:90;transform:translateX(-100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+  .sidebar-overlay{display:block;position:fixed;inset:0;z-index:89;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .25s ease}
+  .sidebar-overlay.show{opacity:1;pointer-events:auto}
+  .shell{position:relative}
+  .topbar{padding:0 14px 0 56px;height:52px}
+  .topbar-left h1{font-size:15px}
+  .topbar-left p{font-size:10px}
+  .topbar-right .top-btn:not(.primary){display:none}
+  .stats-row{grid-template-columns:repeat(3,1fr);gap:8px}
+  .stat-card{padding:10px 12px}
+  .stat-num{font-size:20px}
+  .stat-icon{width:26px;height:26px;font-size:12px}
+  .row2{grid-template-columns:1fr;gap:12px}
+  .preview-grid{grid-template-columns:1fr 1fr}
+  .content{padding:14px 12px}
+  .leads-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .leads-toolbar{gap:6px}
+  .search-wrap{min-width:100px}
+  .filter-sel{font-size:10px;padding:5px 8px}
+  .review-btn,.approve-btn{font-size:10px;padding:5px 10px}
+  .settings-grid,.export-grid{grid-template-columns:1fr}
+  .modal-grid{grid-template-columns:1fr}
+  .modal-box{width:100%;max-width:100vw;max-height:100vh;border-radius:0;padding:16px}
+  .modal-btns{flex-direction:column}
+  .ana-header{flex-direction:column;align-items:start;gap:6px}
+  .dup-card{flex-direction:column;gap:8px}
+  .pagination{flex-direction:column;gap:8px}
+  .pg-btns{flex-wrap:wrap}
+  #toasts{bottom:10px;right:10px}
+  .toast{min-width:auto;max-width:calc(100vw - 20px)}
+}
+
+@media(max-width:540px){
+  .stats-row{grid-template-columns:repeat(2,1fr);gap:6px}
+  .preview-grid{grid-template-columns:1fr}
+  .topbar-right{gap:6px}
+  .topbar-right .top-btn.primary{font-size:10px;padding:5px 10px}
+  .leads-toolbar{flex-direction:column;align-items:stretch}
+  .search-wrap{min-width:auto}
+  .sb-logo{padding:14px 16px}
+  .sb-nav{padding:8px}
+  .leads-table td,.leads-table th{padding:6px 8px;font-size:10px}
+  .dup-modal{padding:18px;max-width:100%;width:94%}
+}
 </style>
 </head>
 <body>
 <div id="toasts"></div>
+
+<button class="mob-toggle" id="mobToggle"><i class="fa-solid fa-bars"></i></button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <!-- EDIT MODAL -->
 <div class="modal-bg hidden" id="editModal">
@@ -1602,6 +1659,7 @@ const PAGE_TITLES = {
 function switchPage(page) {
   document.querySelectorAll('.sb-item').forEach(el => el.classList.toggle('active', el.dataset.page===page));
   document.querySelectorAll('.pg').forEach(el => el.classList.remove('active'));
+  closeSidebar();
   const pgEl = document.getElementById('pg-'+page);
   if (pgEl) pgEl.classList.add('active');
   const titles = PAGE_TITLES[page] || ['Cosmos Lead Intelligence Platform',''];
@@ -1618,6 +1676,15 @@ function switchPage(page) {
 ══════════════════════════════════════════════════════════ */
 const now = () => new Date().toISOString().slice(0,19).replace('T',' ');
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+}
 
 function confirmDelete(id) {
   if (confirm('Delete this lead?')) deleteLead(id);
@@ -1646,6 +1713,10 @@ async function init() {
   document.querySelectorAll('.sb-item').forEach(el => {
     el.addEventListener('click', () => switchPage(el.dataset.page));
   });
+
+  // Mobile sidebar toggle
+  document.getElementById('mobToggle').addEventListener('click', toggleSidebar);
+  document.getElementById('sidebarOverlay').addEventListener('click', closeSidebar);
 
   // Drop zones
   ['mainDropzone','uploadDropzone'].forEach(id => {
