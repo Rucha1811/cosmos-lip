@@ -1,5 +1,42 @@
 const prisma = require("../config/db");
 
+async function createTestLead(req, res, next) {
+  try {
+    // Find a READY_FOR_REVIEW upload with a card and no lead
+    const upload = await prisma.upload.findFirst({
+      where: { status: "READY_FOR_REVIEW" },
+      include: { cards: { include: { lead: true, ocrResult: true }, take: 1 } },
+    });
+    if (!upload || !upload.cards.length) {
+      return res.status(400).json({ error: "No suitable upload found" });
+    }
+    const card = upload.cards[0];
+    if (card.lead) {
+      return res.json({ message: "Card already has a lead", lead: card.lead });
+    }
+
+    // Manually create a lead for this card
+    const entities = { companyName: "Test Company" };
+    const lead = await prisma.lead.create({
+      data: {
+        cardId: card.id,
+        companyName: "Test Company (from /api/debug/test-lead)",
+        email: "test@example.com",
+        status: "PENDING_REVIEW",
+      },
+    });
+
+    res.json({
+      message: "Test lead created",
+      lead,
+      cardId: card.id,
+      ocrRawText: card.ocrResult?.rawText?.substring(0, 200) || "no OCR text",
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function dbStats(req, res, next) {
   try {
     const [uploads, cards, ocrResults, leads, companies, contacts, users] =
@@ -52,4 +89,4 @@ async function dbStats(req, res, next) {
   }
 }
 
-module.exports = { dbStats };
+module.exports = { dbStats, createTestLead };

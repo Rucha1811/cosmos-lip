@@ -49,6 +49,7 @@ router.get("/export/json", exp.json);
 router.delete("/leads/:id", lead.remove);
 router.post("/uploads/:id/reprocess", upload.reprocessUpload);
 router.get("/debug", debug.dbStats);
+router.get("/debug/test-lead", debug.createTestLead);
 
 // Everything below requires a valid token.
 router.use(authenticate);
