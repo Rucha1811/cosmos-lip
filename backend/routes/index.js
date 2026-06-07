@@ -1,0 +1,72 @@
+/**
+ * REST API routes. Mirrors the endpoint list in the spec, with auth + RBAC.
+ */
+const express = require("express");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+const { authenticate, authorize } = require("../middleware/auth");
+const upload = require("../controllers/uploadController");
+const lead = require("../controllers/leadController");
+const dup = require("../controllers/duplicateController");
+const exp = require("../controllers/exportController");
+const analytics = require("../controllers/analyticsController");
+const auth = require("../controllers/authController");
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads/raw");
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_, __, cb) => cb(null, UPLOAD_DIR),
+  filename: (_, file, cb) =>
+    cb(null, `${Date.now()}_${file.originalname.replace(/[^\w.-]/g, "_")}`),
+});
+const ALLOWED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const uploadMw = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024, files: 200 },
+  fileFilter: (_, file, cb) =>
+    cb(ALLOWED.includes(file.mimetype) ? null : new Error("Unsupported file type"), ALLOWED.includes(file.mimetype)),
+});
+
+const router = express.Router();
+
+// ---- Auth ----
+router.post("/auth/login", auth.login);
+router.post("/auth/logout", authenticate, auth.logout);
+router.get("/auth/me", authenticate, auth.me);
+
+// Everything below requires a valid token.
+router.use(authenticate);
+
+// ---- Upload / processing ----
+router.post("/upload", authorize("ADMIN", "UPLOADER", "REVIEWER"), uploadMw.array("files", 200), upload.createUpload);
+router.get("/uploads", upload.listQueue);
+router.get("/uploads/:id", upload.getUpload);
+
+// ---- Leads / review ----
+router.get("/leads", lead.listLeads);
+router.get("/leads/:id", lead.getLead);
+router.put("/leads/:id", authorize("ADMIN", "REVIEWER"), lead.updateLead);
+router.post("/leads/approve", authorize("ADMIN", "REVIEWER"), lead.approve);    // body: { ids: [] }
+router.post("/leads/:id/approve", authorize("ADMIN", "REVIEWER"), lead.approve);
+router.post("/leads/reject", authorize("ADMIN", "REVIEWER"), lead.reject);      // body: { ids: [] }
+router.post("/leads/:id/reject", authorize("ADMIN", "REVIEWER"), lead.reject);
+router.delete("/leads/:id", authorize("ADMIN"), lead.remove);
+
+// ---- Duplicates ----
+router.post("/duplicates/scan", authorize("ADMIN", "REVIEWER"), dup.scan);
+router.get("/duplicates", dup.list);
+router.post("/duplicates/merge", authorize("ADMIN", "REVIEWER"), dup.merge);
+
+// ---- Analytics / reports ----
+router.get("/analytics", analytics.getDashboard);
+router.get("/reports", analytics.getReports);
+
+// ---- Export ----
+router.get("/export/csv", authorize("ADMIN", "REVIEWER"), exp.csv);
+router.get("/export/xlsx", authorize("ADMIN", "REVIEWER"), exp.xlsx);
+router.get("/export/json", authorize("ADMIN", "REVIEWER"), exp.json);
+
+module.exports = router;
