@@ -67,10 +67,8 @@ def _pdf_to_images(data: bytes, dpi: int = PDF_RASTER_DPI) -> list[np.ndarray]:
 
 @app.get("/health")
 def health():
-    paddle_instance = _get_paddle()
     return {
         "status": "ok",
-        "paddleocr": paddle_instance is not None,
         "paddle_disabled": os.environ.get("PADDLE_DISABLED", "0") in ("1", "true"),
         "tesseract": _check_tesseract(),
         "python_version": __import__("sys").version,
