@@ -208,6 +208,25 @@ async function processUpload(uploadId) {
     data: { status: "READY_FOR_REVIEW" },
   });
 
+  // Auto-scan duplicates after processing completes
+  setImmediate(async () => {
+    try {
+      const { findDuplicates } = require("./duplicateDetection");
+      const leads = await prisma.lead.findMany({
+        where: { status: { in: ["PENDING_REVIEW", "APPROVED"] } },
+        select: { id: true, email: true, phonePrimary: true, companyName: true, city: true },
+      });
+      const dupes = findDuplicates(leads);
+      for (const d of dupes) {
+        await prisma.duplicate.upsert({
+          where: { leadAId_leadBId: { leadAId: d.leadAId, leadBId: d.leadBId } },
+          create: { ...d },
+          update: { score: d.score, reasons: d.reasons },
+        });
+      }
+    } catch (_) { /* non-critical */ }
+  });
+
   return {
     uploadId,
     pages: result.pages,
