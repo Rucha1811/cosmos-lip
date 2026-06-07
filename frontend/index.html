@@ -701,13 +701,16 @@ const FIELD_MAP = {
    Connects to Node.js backend at BACKEND_URL.
    Falls back to standalone (IndexedDB only) if backend is unreachable.
 ══════════════════════════════════════════════════════════ */
-let BACKEND_URL = localStorage.getItem('cosmos_backend_url');
-if (!BACKEND_URL) {
-  if (window.location.hostname === 'cosmos-lip.vercel.app') {
-    BACKEND_URL = 'https://cosmos-backend-zqap.onrender.com';
-  } else {
-    BACKEND_URL = 'http://localhost:4000';
-  }
+const PROD_BACKEND = 'https://cosmos-backend-zqap.onrender.com';
+const DEV_BACKEND  = 'http://localhost:4000';
+const saved = localStorage.getItem('cosmos_backend_url');
+let BACKEND_URL;
+if (saved && saved !== DEV_BACKEND) {
+  BACKEND_URL = saved;
+} else if (window.location.hostname === 'cosmos-lip.vercel.app') {
+  BACKEND_URL = PROD_BACKEND;
+} else {
+  BACKEND_URL = DEV_BACKEND;
 }
 let AUTH_TOKEN = localStorage.getItem('cosmos_auth_token') || null;
 
@@ -802,7 +805,12 @@ const API = {
 let BACKEND_ONLINE = false;
 
 async function initBackendConnection() {
-  BACKEND_ONLINE = await API.checkHealth();
+  // Retry health check a few times to handle Render cold starts
+  for (let i = 0; i < 3; i++) {
+    BACKEND_ONLINE = await API.checkHealth();
+    if (BACKEND_ONLINE) break;
+    if (i < 2) await new Promise(r => setTimeout(r, 2000));
+  }
   if (BACKEND_ONLINE && AUTH_TOKEN) {
     const user = await API.me().catch(() => null);
     if (!user) {
@@ -1513,9 +1521,7 @@ function saveBackendUrl() {
     toast('Backend URL updated. Re-connecting...', 'i');
   } else {
     localStorage.removeItem('cosmos_backend_url');
-    BACKEND_URL = window.location.hostname === 'cosmos-lip.vercel.app'
-      ? 'https://cosmos-backend-zqap.onrender.com'
-      : 'http://localhost:4000';
+    BACKEND_URL = window.location.hostname === 'cosmos-lip.vercel.app' ? PROD_BACKEND : DEV_BACKEND;
     toast('Backend URL reset. Re-connecting...', 'i');
   }
   initBackendConnection().then(() => loadLeads());
