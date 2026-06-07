@@ -50,6 +50,7 @@ router.delete("/leads/:id", lead.remove);
 router.post("/uploads/:id/reprocess", upload.reprocessUpload);
 router.get("/debug", debug.dbStats);
 router.get("/debug/test-lead", debug.createTestLead);
+router.get("/debug/test-tx-lead", debug.testTransactionLead);
 
 // Everything below requires a valid token.
 router.use(authenticate);

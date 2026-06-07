@@ -37,6 +37,57 @@ async function createTestLead(req, res, next) {
   }
 }
 
+async function testTransactionLead(req, res, next) {
+  try {
+    const upload = await prisma.upload.findFirst({
+      where: { status: "READY_FOR_REVIEW" },
+      include: { cards: { include: { lead: true }, take: 1 } },
+    });
+    if (!upload || !upload.cards.length) {
+      return res.status(400).json({ error: "No suitable upload found" });
+    }
+    const card = upload.cards[0];
+    if (card.lead) {
+      return res.json({ message: "Card already has a lead", lead: card.lead });
+    }
+
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const company = await tx.company.upsert({
+          where: { normalizedKey: "test-company::test.com" },
+          create: { name: "Test Company", normalizedKey: "test-company::test.com", website: "test.com" },
+          update: {},
+        });
+        const lead = await tx.lead.create({
+          data: {
+            cardId: card.id,
+            companyId: company.id,
+            companyName: "Test Company (from tx)",
+            email: "tx-test@example.com",
+            status: "PENDING_REVIEW",
+          },
+        });
+        return { company, lead };
+      });
+      res.json({
+        message: "Transaction succeeded",
+        company: result.company,
+        lead: result.lead,
+        cardId: card.id,
+      });
+    } catch (txErr) {
+      res.status(500).json({
+        error: "Transaction failed",
+        message: txErr.message,
+        stack: txErr.stack?.split("\n").slice(0, 5).join("\n"),
+      });
+    }
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function dbStats(req, res, next) {
   try {
     const [uploads, cards, ocrResults, leads, companies, contacts, users] =
@@ -89,4 +140,4 @@ async function dbStats(req, res, next) {
   }
 }
 
-module.exports = { dbStats, createTestLead };
+module.exports = { dbStats, createTestLead, testTransactionLead };
