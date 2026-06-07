@@ -1060,12 +1060,13 @@ async function processAll() {
         pending.forEach(i => { i.status = 'done'; i.progress = 100; });
         renderQueue();
         toast(`${result.queued?.length || fileObjects.length} file(s) queued for OCR. Leads will appear after processing.`, 's', 6000);
-        // Poll for processed leads — OCR pipeline can take 30-60s on Render
+        // Poll for processed leads — OCR pipeline takes ~60s per image on Render
+        let _polls = 0;
         (function pollLeads() {
           setTimeout(async () => {
             await loadLeads();
-            const hasNew = S.leads.some(l => l.status === 'Extracted' || l.status === 'Pending Review' || l.status === 'PENDING_REVIEW');
-            if (!hasNew) pollLeads(); // keep polling until leads appear
+            if (++_polls < 15) pollLeads(); // keep polling for ~2 min
+            renderAll(); updateStats();
           }, 8000);
         })();
         renderAll(); updateStats();
