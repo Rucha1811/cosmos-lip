@@ -18,10 +18,11 @@ async function buildAndStream(req, res, next, format) {
       salesBranchBySource: {}, // configurable mapping event->branch
     });
 
+    const userId = req.user?.sub || (await prisma.user.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id || 'unknown';
     const exportRow = await prisma.export.create({
       data: {
         format, storedPath: filePath, leadCount: rowCount,
-        filters: where, createdById: req.user?.sub || 'anonymous',
+        filters: where, createdById: userId,
       },
     });
     if (req.user) {
