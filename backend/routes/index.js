@@ -32,22 +32,25 @@ const uploadMw = multer({
 
 const router = express.Router();
 
-// ---- Auth ----
+// ---- Public routes (no auth required) ----
 router.post("/auth/login", auth.login);
-router.post("/auth/logout", authenticate, auth.logout);
-router.get("/auth/me", authenticate, auth.me);
+router.post("/upload", uploadMw.array("files", 200), upload.createUpload);
+router.get("/uploads", upload.listQueue);
+router.get("/uploads/:id", upload.getUpload);
+router.get("/leads", lead.listLeads);
+router.get("/leads/:id", lead.getLead);
+router.get("/duplicates", dup.list);
+router.get("/analytics", analytics.getDashboard);
+router.get("/reports", analytics.getReports);
 
 // Everything below requires a valid token.
 router.use(authenticate);
 
-// ---- Upload / processing ----
-router.post("/upload", authorize("ADMIN", "UPLOADER", "REVIEWER"), uploadMw.array("files", 200), upload.createUpload);
-router.get("/uploads", upload.listQueue);
-router.get("/uploads/:id", upload.getUpload);
+// ---- Auth (authenticated) ----
+router.post("/auth/logout", authenticate, auth.logout);
+router.get("/auth/me", authenticate, auth.me);
 
-// ---- Leads / review ----
-router.get("/leads", lead.listLeads);
-router.get("/leads/:id", lead.getLead);
+// ---- Leads write operations (authenticated + role check) ----
 router.put("/leads/:id", authorize("ADMIN", "REVIEWER"), lead.updateLead);
 router.post("/leads/approve", authorize("ADMIN", "REVIEWER"), lead.approve);    // body: { ids: [] }
 router.post("/leads/:id/approve", authorize("ADMIN", "REVIEWER"), lead.approve);
@@ -55,16 +58,11 @@ router.post("/leads/reject", authorize("ADMIN", "REVIEWER"), lead.reject);      
 router.post("/leads/:id/reject", authorize("ADMIN", "REVIEWER"), lead.reject);
 router.delete("/leads/:id", authorize("ADMIN"), lead.remove);
 
-// ---- Duplicates ----
+// ---- Duplicates write operations (authenticated + role check) ----
 router.post("/duplicates/scan", authorize("ADMIN", "REVIEWER"), dup.scan);
-router.get("/duplicates", dup.list);
 router.post("/duplicates/merge", authorize("ADMIN", "REVIEWER"), dup.merge);
 
-// ---- Analytics / reports ----
-router.get("/analytics", analytics.getDashboard);
-router.get("/reports", analytics.getReports);
-
-// ---- Export ----
+// ---- Export (authenticated + role check) ----
 router.get("/export/csv", authorize("ADMIN", "REVIEWER"), exp.csv);
 router.get("/export/xlsx", authorize("ADMIN", "REVIEWER"), exp.xlsx);
 router.get("/export/json", authorize("ADMIN", "REVIEWER"), exp.json);

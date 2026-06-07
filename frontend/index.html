@@ -880,15 +880,14 @@ async function initBackendConnection() {
       }, 10000);
     })();
   }
+  // Token validation is optional — read/upload work without auth
   if (BACKEND_ONLINE && AUTH_TOKEN) {
     const user = await API.me().catch(() => null);
-    if (!user) {
-      // Token expired or invalid
+    if (user) {
+      S.currentUser = user;
+    } else {
       AUTH_TOKEN = null;
       localStorage.removeItem('cosmos_auth_token');
-      BACKEND_ONLINE = false;
-    } else {
-      S.currentUser = user;
     }
   }
   updateConnectionBadge();
@@ -897,12 +896,9 @@ async function initBackendConnection() {
 function updateConnectionBadge() {
   const badge = document.getElementById('connectionBadge');
   if (!badge) return;
-  if (BACKEND_ONLINE && AUTH_TOKEN) {
-    badge.textContent = '● Connected';
-    badge.style.color = 'var(--green)';
-  } else if (BACKEND_ONLINE) {
-    badge.textContent = '● Backend up (not logged in)';
-    badge.style.color = 'var(--amber)';
+  if (BACKEND_ONLINE) {
+    badge.textContent = '● Connected' + (AUTH_TOKEN ? '' : ' (read-only)');
+    badge.style.color = AUTH_TOKEN ? 'var(--green)' : 'var(--amber)';
   } else {
     badge.textContent = '○ Standalone mode';
     badge.style.color = 'var(--w3)';
@@ -963,7 +959,7 @@ const IDB = (() => {
 
 async function loadLeads() {
   try {
-    if (BACKEND_ONLINE && AUTH_TOKEN) {
+    if (BACKEND_ONLINE) {
       // Load from PostgreSQL via backend API
       const result = await API.getLeads({ take: 200, skip: 0 });
       // Normalize backend leads to be compatible with local lead shape
@@ -1105,7 +1101,7 @@ async function processAll() {
   if (!pending.length) { toast('No pending files in queue', 'w'); return; }
 
   // ── Backend mode: POST files directly to Node/OCR pipeline ──────────────
-  if (BACKEND_ONLINE && AUTH_TOKEN) {
+  if (BACKEND_ONLINE) {
     toast(`Sending ${pending.length} file(s) to backend OCR pipeline…`, 'i', 5000);
     const fileObjects = pending.map(i => i.fileRef).filter(Boolean);
     if (fileObjects.length) {
