@@ -155,4 +155,25 @@ async function shutdownQueue() {
   }
 }
 
-module.exports = { enqueueUpload, getQueueStats, shutdownQueue };
+/**
+ * Reset uploads stuck in DETECTING or EXTRACTING status from a previous crash,
+ * and re-enqueue them for processing.
+ */
+async function resetStuckUploads() {
+  const prisma = require("../config/db");
+  const stuck = await prisma.upload.findMany({
+    where: { status: { in: ["DETECTING", "EXTRACTING"] } },
+  });
+  for (const u of stuck) {
+    await prisma.upload.update({
+      where: { id: u.id },
+      data: { status: "PENDING", error: null },
+    });
+    _fallbackQueue.push(u.id);
+    console.log(`[Queue] Recovered stuck upload ${u.id} (${u.originalName})`);
+  }
+  if (stuck.length) _processNext();
+  console.log(`[Queue] Recovered ${stuck.length} stuck upload(s)`);
+}
+
+module.exports = { enqueueUpload, getQueueStats, shutdownQueue, resetStuckUploads };
