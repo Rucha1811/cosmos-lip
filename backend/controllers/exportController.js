@@ -4,8 +4,12 @@ const { audit } = require("../middleware/audit");
 
 async function buildAndStream(req, res, next, format) {
   try {
-    // Always export ALL approved leads matching the (optional) filter.
-    const where = { status: "APPROVED" };
+    const where = {};
+    if (req.query.status && req.query.status !== 'all') {
+      where.status = req.query.status === 'Extracted' ? 'PENDING_REVIEW' : req.query.status.toUpperCase();
+    } else {
+      where.status = { not: 'REJECTED' };
+    }
     if (req.query.source) where.source = req.query.source;
 
     const leads = await prisma.lead.findMany({

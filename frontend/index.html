@@ -1309,6 +1309,11 @@ function buildCosmosRows(statusFilter) {
 }
 
 function doExport() {
+  if (BACKEND_ONLINE) {
+    window.location.href = `${BACKEND_URL}/api/export/csv`;
+    toast('Downloading CSV…', 's');
+    return;
+  }
   const statusFilter = document.getElementById('expStatus')?.value || 'all';
   const rows = buildCosmosRows(statusFilter);
   if (!rows.length) { toast('No leads to export', 'w'); return; }
