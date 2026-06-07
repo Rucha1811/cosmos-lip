@@ -701,7 +701,14 @@ const FIELD_MAP = {
    Connects to Node.js backend at BACKEND_URL.
    Falls back to standalone (IndexedDB only) if backend is unreachable.
 ══════════════════════════════════════════════════════════ */
-let BACKEND_URL = localStorage.getItem('cosmos_backend_url') || 'http://localhost:4000';
+let BACKEND_URL = localStorage.getItem('cosmos_backend_url');
+if (!BACKEND_URL) {
+  if (window.location.hostname === 'cosmos-lip.vercel.app') {
+    BACKEND_URL = 'https://cosmos-backend-zqap.onrender.com';
+  } else {
+    BACKEND_URL = 'http://localhost:4000';
+  }
+}
 let AUTH_TOKEN = localStorage.getItem('cosmos_auth_token') || null;
 
 const API = {
@@ -1506,8 +1513,10 @@ function saveBackendUrl() {
     toast('Backend URL updated. Re-connecting...', 'i');
   } else {
     localStorage.removeItem('cosmos_backend_url');
-    BACKEND_URL = 'http://localhost:4000';
-    toast('Backend URL reset to localhost. Re-connecting...', 'i');
+    BACKEND_URL = window.location.hostname === 'cosmos-lip.vercel.app'
+      ? 'https://cosmos-backend-zqap.onrender.com'
+      : 'http://localhost:4000';
+    toast('Backend URL reset. Re-connecting...', 'i');
   }
   initBackendConnection().then(() => loadLeads());
 }

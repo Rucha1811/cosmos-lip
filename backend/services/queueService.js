@@ -27,6 +27,14 @@ function getQueue() {
 
   try {
     queue = new Bull("ocr-processing", REDIS_URL, {
+      redis: {
+        connectTimeout: 4000,
+        retryStrategy: (times) => {
+          if (times > 2) return null;
+          return Math.min(times * 200, 1000);
+        },
+        maxRetriesPerRequest: 1,
+      },
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: "exponential", delay: 5000 },
@@ -34,6 +42,8 @@ function getQueue() {
         removeOnFail: 200,
       },
     });
+    // If Redis connection fails, fall back gracefully
+    queue.on("error", () => { queue = null; });
 
     // Process jobs with configured concurrency
     queue.process(CONCURRENCY, async (job) => {
@@ -98,17 +108,27 @@ async function enqueueUpload(uploadId) {
 
 /**
  * Get queue statistics for the monitoring dashboard.
+ * Times out quickly if Redis is unavailable so the health endpoint doesn't hang.
  */
 async function getQueueStats() {
   const q = getQueue();
   if (!q) return { active: 0, waiting: 0, completed: 0, failed: 0, redis: false };
-  const [waiting, active, completed, failed] = await Promise.all([
-    q.getWaitingCount(),
-    q.getActiveCount(),
-    q.getCompletedCount(),
-    q.getFailedCount(),
-  ]);
-  return { waiting, active, completed, failed, redis: true };
+  const TIMEOUT = 3000;
+  try {
+    const counts = await Promise.race([
+      Promise.all([
+        q.getWaitingCount(),
+        q.getActiveCount(),
+        q.getCompletedCount(),
+        q.getFailedCount(),
+      ]),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), TIMEOUT)),
+    ]);
+    const [waiting, active, completed, failed] = counts;
+    return { waiting, active, completed, failed, redis: true };
+  } catch {
+    return { active: 0, waiting: 0, completed: 0, failed: 0, redis: false };
+  }
 }
 
 /**
