@@ -793,9 +793,9 @@ const API = {
     return r.blob();
   },
 
-  async checkHealth() {
+  async checkHealth(timeoutMs = 8000) {
     try {
-      const r = await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(3000) });
+      const r = await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(timeoutMs) });
       return r.ok;
     } catch { return false; }
   },
@@ -805,11 +805,23 @@ const API = {
 let BACKEND_ONLINE = false;
 
 async function initBackendConnection() {
-  // Retry health check a few times to handle Render cold starts
-  for (let i = 0; i < 3; i++) {
-    BACKEND_ONLINE = await API.checkHealth();
+  // Fire warm-up request to trigger Render cold start, then retry health check
+  fetch(`${BACKEND_URL}/health`).catch(() => {});
+  for (let i = 0; i < 5; i++) {
+    BACKEND_ONLINE = await API.checkHealth(i === 0 ? 15000 : 8000);
     if (BACKEND_ONLINE) break;
-    if (i < 2) await new Promise(r => setTimeout(r, 2000));
+    if (i < 4) await new Promise(r => setTimeout(r, 3000));
+  }
+  if (!BACKEND_ONLINE) {
+    // Keep polling in background in case Render is still cold-starting
+    (function poll() {
+      setTimeout(async () => {
+        if (BACKEND_ONLINE) return;
+        BACKEND_ONLINE = await API.checkHealth(15000);
+        if (BACKEND_ONLINE) { updateConnectionBadge(); loadLeads(); return; }
+        poll();
+      }, 10000);
+    })();
   }
   if (BACKEND_ONLINE && AUTH_TOKEN) {
     const user = await API.me().catch(() => null);
