@@ -122,89 +122,58 @@ async function processUpload(uploadId) {
   const createdLeadIds = [];
 
   for (const c of result.cards) {
-    // Save crop image to disk before the transaction (I/O outside of DB tx).
-    const croppedPath = saveCropImage(
-      uploadId,
-      c.cardIndex,
-      c.pageIndex,
-      c.cropBase64 || ""   // OCR service may attach base64 crop; gracefully empty if not
-    );
+    const croppedPath = saveCropImage(uploadId, c.cardIndex, c.pageIndex, c.cropBase64 || "");
 
     try {
-      await prisma.$transaction(async (tx) => {
-        const card = await tx.card.create({
-          data: {
-            uploadId,
-            pageIndex: c.pageIndex,
-            cardIndex: c.cardIndex,
-            croppedPath,
-            bbox: c.bbox
-              ? { x: c.bbox[0], y: c.bbox[1], w: c.bbox[2], h: c.bbox[3] }
-              : undefined,
-            quadrilateral: c.quadrilateral || undefined,
-            rotationApplied: c.rotationApplied || 0,
-            qualityScore: c.qualityScore || 0,
-          },
-        });
-
-        await tx.ocrResult.create({
-          data: {
-            cardId: card.id,
-            chosenEngine: c.ocr.chosenEngine || "TESSERACT",
-            rawText: c.ocr.rawText || "",
-            confidence: c.ocr.confidence || 0,
-            engineResults: c.ocr.engineResults || {},
-          },
-        });
-
-        const entities = extractEntities(c.ocr.rawText);
-        const { fields, geo, overallConfidence } = validateLead(entities);
-        const company = await upsertCompany(tx, entities, geo);
-
-        const lead = await tx.lead.create({
-          data: {
-            cardId: card.id,
-            companyId: company?.id || null,
-            companyName: entities.companyName || null,
-            website: entities.website || null,
-            email: entities.email || null,
-            phonePrimary: entities.phonePrimary || null,
-            phoneSecondary: entities.phoneSecondary || null,
-            address: entities.address || null,
-            city: geo.city || null,
-            state: geo.state || null,
-            country: geo.country || null,
-            postalCode: entities.postalCode || null,
-            gstin: entities.gstin || null,
-            industry: entities.industry || null,
-            linkedin: entities.linkedin || null,
-            twitter: entities.twitter || null,
-            facebook: entities.facebook || null,
-            instagram: entities.instagram || null,
-            youtube: entities.youtube || null,
-            whatsapp: entities.whatsapp || null,
-            aiConfidence: overallConfidence,
-            validation: fields,
-            source: upload.source || null,
-            status: "PENDING_REVIEW",
-            contacts: {
-              create: (entities.contacts || []).map((ct) => ({
-                fullName: ct.fullName || null,
-                designation: ct.designation || null,
-                department: ct.department || null,
-                email: ct.email || null,
-                mobile: ct.mobile || null,
-                phone: ct.phone || null,
-                isPrimary: !!ct.isPrimary,
-              })),
-            },
-          },
-        });
-        createdLeadIds.push(lead.id);
+      const card = await prisma.card.create({
+        data: {
+          uploadId, pageIndex: c.pageIndex, cardIndex: c.cardIndex,
+          croppedPath,
+          bbox: c.bbox ? { x: c.bbox[0], y: c.bbox[1], w: c.bbox[2], h: c.bbox[3] } : undefined,
+          quadrilateral: c.quadrilateral || undefined,
+          rotationApplied: c.rotationApplied || 0, qualityScore: c.qualityScore || 0,
+        },
       });
-    } catch (txErr) {
-      console.error(`[processUpload] Transaction failed for upload ${uploadId}, card ${c.cardIndex}: ${txErr.message}`, txErr.stack);
-      throw txErr;
+
+      await prisma.ocrResult.create({
+        data: {
+          cardId: card.id,
+          chosenEngine: c.ocr.chosenEngine || "TESSERACT",
+          rawText: c.ocr.rawText || "", confidence: c.ocr.confidence || 0,
+          engineResults: c.ocr.engineResults || {},
+        },
+      });
+
+      const entities = extractEntities(c.ocr.rawText);
+      const { fields, geo, overallConfidence } = validateLead(entities);
+      const company = await upsertCompany(prisma, entities, geo);
+
+      const lead = await prisma.lead.create({
+        data: {
+          cardId: card.id, companyId: company?.id || null,
+          companyName: entities.companyName || null, website: entities.website || null,
+          email: entities.email || null, phonePrimary: entities.phonePrimary || null,
+          phoneSecondary: entities.phoneSecondary || null, address: entities.address || null,
+          city: geo.city || null, state: geo.state || null, country: geo.country || null,
+          postalCode: entities.postalCode || null, gstin: entities.gstin || null,
+          industry: entities.industry || null, linkedin: entities.linkedin || null,
+          twitter: entities.twitter || null, facebook: entities.facebook || null,
+          instagram: entities.instagram || null, youtube: entities.youtube || null,
+          whatsapp: entities.whatsapp || null, aiConfidence: overallConfidence,
+          validation: fields, source: upload.source || null, status: "PENDING_REVIEW",
+          contacts: {
+            create: (entities.contacts || []).map((ct) => ({
+              fullName: ct.fullName || null, designation: ct.designation || null,
+              department: ct.department || null, email: ct.email || null,
+              mobile: ct.mobile || null, phone: ct.phone || null, isPrimary: !!ct.isPrimary,
+            })),
+          },
+        },
+      });
+      createdLeadIds.push(lead.id);
+    } catch (err) {
+      console.error(`[processUpload] Failed processing card ${c.cardIndex} for upload ${uploadId}: ${err.message}`, err.stack);
+      throw err;
     }
   }
 
