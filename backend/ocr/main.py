@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("cosmos-ocr")
 
 PDF_RASTER_DPI = int(os.environ.get("PDF_RASTER_DPI", "200"))
-MAX_IMAGE_DIM = 2000  # downscale to save memory on Render's free tier
+MAX_IMAGE_DIM = 2500  # downscale to save memory on Render's free tier
 
 app = FastAPI(title="Cosmos CV/OCR Service", version="1.1.0")
 

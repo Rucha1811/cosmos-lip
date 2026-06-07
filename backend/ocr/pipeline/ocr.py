@@ -103,14 +103,15 @@ def _tesseract_ocr(image: np.ndarray) -> dict:
             "available": False,
         }
     try:
-        data = pytesseract.image_to_data(image, output_type=Output.DICT)
+        config = "--psm 4 --oem 1 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.,()/:-+ "
+        data = pytesseract.image_to_data(image, config=config, output_type=Output.DICT)
         lines, confs = [], []
         for i, word in enumerate(data["text"]):
             conf = float(data["conf"][i])
             if word.strip() and conf >= 0:
                 lines.append({"text": word, "confidence": conf / 100.0})
                 confs.append(conf / 100.0)
-        text = pytesseract.image_to_string(image).strip()
+        text = pytesseract.image_to_string(image, config=config).strip()
         confidence = float(np.mean(confs)) if confs else 0.0
         return {
             "engine": "TESSERACT",

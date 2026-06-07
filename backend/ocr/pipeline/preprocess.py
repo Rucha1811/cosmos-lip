@@ -38,7 +38,7 @@ def apply_clahe(gray: np.ndarray, clip: float = 2.0, grid: int = 8) -> np.ndarra
 def adaptive_threshold(gray: np.ndarray) -> np.ndarray:
     """Binarise for OCR engines that prefer high-contrast input (Tesseract)."""
     return cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 10
     )
 
 
