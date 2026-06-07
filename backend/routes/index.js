@@ -45,6 +45,7 @@ router.get("/reports", analytics.getReports);
 router.get("/export/csv", exp.csv);
 router.get("/export/xlsx", exp.xlsx);
 router.get("/export/json", exp.json);
+router.delete("/leads/:id", lead.remove);
 
 // Everything below requires a valid token.
 router.use(authenticate);
@@ -59,7 +60,6 @@ router.post("/leads/approve", authorize("ADMIN", "REVIEWER"), lead.approve);    
 router.post("/leads/:id/approve", authorize("ADMIN", "REVIEWER"), lead.approve);
 router.post("/leads/reject", authorize("ADMIN", "REVIEWER"), lead.reject);      // body: { ids: [] }
 router.post("/leads/:id/reject", authorize("ADMIN", "REVIEWER"), lead.reject);
-router.delete("/leads/:id", authorize("ADMIN"), lead.remove);
 
 // ---- Duplicates write operations (authenticated + role check) ----
 router.post("/duplicates/scan", authorize("ADMIN", "REVIEWER"), dup.scan);

@@ -996,6 +996,11 @@ async function persistLead(lead) {
   if (i >= 0) S.leads[i] = lead; else S.leads.unshift(lead);
 }
 async function deleteLead(id) {
+  if (BACKEND_ONLINE) {
+    try {
+      await fetch(`${BACKEND_URL}/api/leads/${id}`, { method: 'DELETE' });
+    } catch (_) {}
+  }
   await IDB.del(id);
   S.leads = S.leads.filter(l => l._id !== id);
   renderAll();
