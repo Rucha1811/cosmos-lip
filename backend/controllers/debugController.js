@@ -39,17 +39,16 @@ async function createTestLead(req, res, next) {
 
 async function testTransactionLead(req, res, next) {
   try {
+    // Find a card that has no lead
     const upload = await prisma.upload.findFirst({
-      where: { status: "READY_FOR_REVIEW" },
-      include: { cards: { include: { lead: true }, take: 1 } },
+      where: { status: "READY_FOR_REVIEW", cards: { some: { lead: null } } },
+      include: { cards: { where: { lead: null }, take: 1 } },
+      orderBy: { createdAt: "desc" },
     });
     if (!upload || !upload.cards.length) {
-      return res.status(400).json({ error: "No suitable upload found" });
+      return res.status(400).json({ error: "No suitable upload/card found" });
     }
     const card = upload.cards[0];
-    if (card.lead) {
-      return res.json({ message: "Card already has a lead", lead: card.lead });
-    }
 
     let result;
     try {
