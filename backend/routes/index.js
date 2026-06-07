@@ -9,6 +9,7 @@ const fs = require("fs");
 const { authenticate, authorize } = require("../middleware/auth");
 const upload = require("../controllers/uploadController");
 const lead = require("../controllers/leadController");
+const debug = require("../controllers/debugController");
 const dup = require("../controllers/duplicateController");
 const exp = require("../controllers/exportController");
 const analytics = require("../controllers/analyticsController");
@@ -46,6 +47,8 @@ router.get("/export/csv", exp.csv);
 router.get("/export/xlsx", exp.xlsx);
 router.get("/export/json", exp.json);
 router.delete("/leads/:id", lead.remove);
+router.post("/uploads/:id/reprocess", upload.reprocessUpload);
+router.get("/debug", debug.dbStats);
 
 // Everything below requires a valid token.
 router.use(authenticate);

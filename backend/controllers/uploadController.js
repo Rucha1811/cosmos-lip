@@ -64,6 +64,35 @@ async function getUpload(req, res, next) {
   }
 }
 
+async function reprocessUpload(req, res, next) {
+  try {
+    const upload = await prisma.upload.findUnique({ where: { id: req.params.id } });
+    if (!upload) return res.status(404).json({ error: "Upload not found" });
+
+    // Delete existing cards + cascade ocrResults
+    await prisma.card.deleteMany({ where: { uploadId: upload.id } });
+
+    // Reset status so processUpload picks it up fresh
+    await prisma.upload.update({
+      where: { id: upload.id },
+      data: { status: "PENDING", error: null },
+    });
+
+    // Enqueue for processing
+    const { enqueueUpload } = require("../services/queueService");
+    const { jobId, fallback } = await enqueueUpload(upload.id);
+
+    res.json({
+      message: "Upload re-enqueued for processing",
+      id: upload.id,
+      jobId,
+      fallback,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function listQueue(req, res, next) {
   try {
     const { take = 50, skip = 0, status } = req.query;
@@ -87,4 +116,4 @@ async function listQueue(req, res, next) {
   }
 }
 
-module.exports = { createUpload, getUpload, listQueue };
+module.exports = { createUpload, getUpload, listQueue, reprocessUpload };
