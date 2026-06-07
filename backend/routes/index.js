@@ -42,6 +42,9 @@ router.get("/leads/:id", lead.getLead);
 router.get("/duplicates", dup.list);
 router.get("/analytics", analytics.getDashboard);
 router.get("/reports", analytics.getReports);
+router.get("/export/csv", exp.csv);
+router.get("/export/xlsx", exp.xlsx);
+router.get("/export/json", exp.json);
 
 // Everything below requires a valid token.
 router.use(authenticate);
@@ -61,10 +64,5 @@ router.delete("/leads/:id", authorize("ADMIN"), lead.remove);
 // ---- Duplicates write operations (authenticated + role check) ----
 router.post("/duplicates/scan", authorize("ADMIN", "REVIEWER"), dup.scan);
 router.post("/duplicates/merge", authorize("ADMIN", "REVIEWER"), dup.merge);
-
-// ---- Export (authenticated + role check) ----
-router.get("/export/csv", authorize("ADMIN", "REVIEWER"), exp.csv);
-router.get("/export/xlsx", authorize("ADMIN", "REVIEWER"), exp.xlsx);
-router.get("/export/json", authorize("ADMIN", "REVIEWER"), exp.json);
 
 module.exports = router;

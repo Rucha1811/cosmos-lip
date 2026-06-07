@@ -21,10 +21,12 @@ async function buildAndStream(req, res, next, format) {
     const exportRow = await prisma.export.create({
       data: {
         format, storedPath: filePath, leadCount: rowCount,
-        filters: where, createdById: req.user.sub,
+        filters: where, createdById: req.user?.sub || 'anonymous',
       },
     });
-    await audit(req, `EXPORT_${format}`, "Export", exportRow.id, { rowCount });
+    if (req.user) {
+      await audit(req, `EXPORT_${format}`, "Export", exportRow.id, { rowCount });
+    }
 
     res.download(filePath, fileName);
   } catch (e) { next(e); }

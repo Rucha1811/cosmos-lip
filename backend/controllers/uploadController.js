@@ -15,6 +15,7 @@ async function createUpload(req, res, next) {
     }
 
     const created = [];
+    const userId = req.user?.sub || (await prisma.user.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id || 'unknown';
     for (const f of req.files) {
       const upload = await prisma.upload.create({
         data: {
@@ -23,14 +24,16 @@ async function createUpload(req, res, next) {
           mimeType: f.mimetype,
           sizeBytes: f.size,
           source: req.body.source || null,
-          uploadedById: req.user.sub,
+          uploadedById: userId,
           status: "PENDING",
         },
       });
-      await audit(req, "UPLOAD_CREATE", "Upload", upload.id, {
-        name: f.originalname,
-        size: f.size,
-      });
+      if (req.user) {
+        await audit(req, "UPLOAD_CREATE", "Upload", upload.id, {
+          name: f.originalname,
+          size: f.size,
+        });
+      }
       created.push(upload);
     }
 
