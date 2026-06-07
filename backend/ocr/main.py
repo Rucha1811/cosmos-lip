@@ -33,8 +33,18 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("cosmos-ocr")
 
 PDF_RASTER_DPI = int(os.environ.get("PDF_RASTER_DPI", "200"))
+MAX_IMAGE_DIM = 2000  # downscale to save memory on Render's free tier
 
 app = FastAPI(title="Cosmos CV/OCR Service", version="1.1.0")
+
+
+def _resize_if_large(img: np.ndarray) -> np.ndarray:
+    h, w = img.shape[:2]
+    if max(h, w) > MAX_IMAGE_DIM:
+        scale = MAX_IMAGE_DIM / max(h, w)
+        new_w, new_h = int(w * scale), int(h * scale)
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    return img
 
 
 def _read_image(data: bytes) -> np.ndarray:
@@ -42,7 +52,7 @@ def _read_image(data: bytes) -> np.ndarray:
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Unsupported or corrupt image")
-    return img
+    return _resize_if_large(img)
 
 
 def _pdf_to_images(data: bytes, dpi: int = PDF_RASTER_DPI) -> list[np.ndarray]:
@@ -61,7 +71,7 @@ def _pdf_to_images(data: bytes, dpi: int = PDF_RASTER_DPI) -> list[np.ndarray]:
             img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
         else:
             img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        pages.append(img)
+        pages.append(_resize_if_large(img))
     return pages
 
 

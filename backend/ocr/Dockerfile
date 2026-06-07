@@ -3,9 +3,9 @@ FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PADDLE_DISABLED=0 \
+    PADDLE_DISABLED=1 \
     CONFIDENCE_FALLBACK_THRESHOLD=0.85 \
-    PDF_RASTER_DPI=200
+    PDF_RASTER_DPI=150
 
 WORKDIR /app
 
@@ -40,5 +40,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
   CMD wget -qO- http://localhost:8000/health || exit 1
 
-# 2 workers; increase for multi-core production machines
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Single worker to stay within Render free-tier memory (512 MB)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
