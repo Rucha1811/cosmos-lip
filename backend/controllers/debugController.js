@@ -172,6 +172,152 @@ async function testFullPipelineTx(req, res, next) {
   }
 }
 
+function normalizedCompanyKey(name, website) {
+  const n = (name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const domain = (website || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  const key = `${n}::${domain}`;
+  return key.length > 2 ? key.slice(0, 250) : `unknown::${Date.now()}`;
+}
+
+async function upsertCompany(tx, entities, geo) {
+  if (!entities.companyName) return null;
+  const key = normalizedCompanyKey(entities.companyName, entities.website);
+  return tx.company.upsert({
+    where: { normalizedKey: key },
+    create: {
+      name: entities.companyName, normalizedKey: key,
+      website: entities.website || null,
+      domain: (entities.website || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] || null,
+      industry: entities.industry || null, gstin: entities.gstin || null,
+      city: geo.city || null, state: geo.state || null, country: geo.country || null,
+      postalCode: entities.postalCode || null,
+    },
+    update: {
+      website: entities.website || undefined, gstin: entities.gstin || undefined,
+      industry: entities.industry || undefined, city: geo.city || undefined,
+      state: geo.state || undefined, country: geo.country || undefined,
+    },
+  });
+}
+
+async function simulateProcessing(req, res, next) {
+  try {
+    const { id } = req.params;
+    const upload = await prisma.upload.findUnique({ where: { id } });
+    if (!upload) return res.status(404).json({ error: "Upload not found" });
+
+    // Step through exactly what processUpload does
+    const steps = [];
+    const { detectAndOcr } = require("../services/cvOcrClient");
+    const { extractEntities } = require("../services/entityExtraction");
+    const { validateLead } = require("../services/validation");
+
+    // Step 1: Call OCR service
+    steps.push({ step: "detectAndOcr", status: "pending" });
+    let result;
+    try {
+      result = await detectAndOcr(upload.storedPath, upload.originalName);
+      steps[0].status = "ok";
+      steps[0].pages = result.pages;
+      steps[0].cardCount = result.cards?.length;
+    } catch (e) {
+      steps[0].status = "error";
+      steps[0].error = e.message;
+      return res.json({ upload: upload.id, filePath: upload.storedPath, steps });
+    }
+
+    // Process each card
+    for (let i = 0; i < result.cards.length; i++) {
+      const c = result.cards[i];
+      steps.push({ step: `card_${i}`, status: "pending", cardIndex: c.cardIndex });
+
+      try {
+        // Step 2: Begin transaction
+        const txResult = await prisma.$transaction(async (tx) => {
+          const card = await tx.card.create({
+            data: {
+              uploadId: upload.id, pageIndex: c.pageIndex, cardIndex: c.cardIndex,
+              croppedPath: "", bbox: c.bbox ? { x: c.bbox[0], y: c.bbox[1], w: c.bbox[2], h: c.bbox[3] } : undefined,
+              quadrilateral: c.quadrilateral || undefined,
+              rotationApplied: c.rotationApplied || 0, qualityScore: c.qualityScore || 0,
+            },
+          });
+          const ocr = await tx.ocrResult.create({
+            data: {
+              cardId: card.id,
+              chosenEngine: c.ocr?.chosenEngine || "TESSERACT",
+              rawText: c.ocr?.rawText || "", confidence: c.ocr?.confidence || 0,
+              engineResults: c.ocr?.engineResults || {},
+            },
+          });
+          const entities = extractEntities(c.ocr?.rawText || "");
+          let validation;
+          try {
+            validation = validateLead(entities);
+          } catch (ve) {
+            return { error: `validateLead threw: ${ve.message}`, entities };
+          }
+          const { fields, geo, overallConfidence } = validation;
+          let company = null;
+          try {
+            company = await upsertCompany(tx, entities, geo);
+          } catch (ce) {
+            return { error: `upsertCompany threw: ${ce.message}`, entities };
+          }
+
+          let lead;
+          try {
+            lead = await tx.lead.create({
+              data: {
+                cardId: card.id, companyId: company?.id || null,
+                companyName: entities.companyName || null, website: entities.website || null,
+                email: entities.email || null, phonePrimary: entities.phonePrimary || null,
+                phoneSecondary: entities.phoneSecondary || null, address: entities.address || null,
+                city: geo.city || null, state: geo.state || null, country: geo.country || null,
+                postalCode: entities.postalCode || null, gstin: entities.gstin || null,
+                industry: entities.industry || null, linkedin: entities.linkedin || null,
+                twitter: entities.twitter || null, facebook: entities.facebook || null,
+                instagram: entities.instagram || null, youtube: entities.youtube || null,
+                whatsapp: entities.whatsapp || null, aiConfidence: overallConfidence,
+                validation: fields, source: upload.source || null, status: "PENDING_REVIEW",
+                contacts: {
+                  create: (entities.contacts || []).map((ct) => ({
+                    fullName: ct.fullName || null, designation: ct.designation || null,
+                    department: ct.department || null, email: ct.email || null,
+                    mobile: ct.mobile || null, phone: ct.phone || null, isPrimary: !!ct.isPrimary,
+                  })),
+                },
+              },
+            });
+          } catch (le) {
+            return { error: `lead.create threw: ${le.message}`, code: le.code, entities };
+          }
+
+          return { card, ocr, company, lead };
+        });
+
+        if (txResult.error) {
+          steps[i + 1].status = "error";
+          steps[i + 1].txError = txResult.error;
+          steps[i + 1].entities = txResult.entities;
+        } else {
+          steps[i + 1].status = "ok";
+          steps[i + 1].cardId = txResult.card?.id;
+          steps[i + 1].leadId = txResult.lead?.id;
+        }
+      } catch (txErr) {
+        steps[i + 1].status = "error";
+        steps[i + 1].txError = txErr.message;
+        steps[i + 1].txCode = txErr.code;
+      }
+    }
+
+    res.json({ upload: upload.id, filePath: upload.storedPath, steps });
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function dbStats(req, res, next) {
   try {
     const [uploads, cards, ocrResults, leads, companies, contacts, users] =
@@ -224,4 +370,4 @@ async function dbStats(req, res, next) {
   }
 }
 
-module.exports = { dbStats, createTestLead, testTransactionLead, testFullPipelineTx };
+module.exports = { dbStats, createTestLead, testTransactionLead, testFullPipelineTx, simulateProcessing };

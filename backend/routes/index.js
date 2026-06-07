@@ -52,6 +52,7 @@ router.get("/debug", debug.dbStats);
 router.get("/debug/test-lead", debug.createTestLead);
 router.get("/debug/test-tx-lead", debug.testTransactionLead);
 router.get("/debug/test-full-tx", debug.testFullPipelineTx);
+router.get("/debug/simulate/:id", debug.simulateProcessing);
 
 // Everything below requires a valid token.
 router.use(authenticate);
