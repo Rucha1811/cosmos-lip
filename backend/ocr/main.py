@@ -48,8 +48,16 @@ def _resize_if_large(img: np.ndarray) -> np.ndarray:
 
 
 def _read_image(data: bytes) -> np.ndarray:
-    arr = np.frombuffer(data, np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    # Use PIL to handle EXIF orientation (phones embed rotation in metadata)
+    from PIL import Image as PILImage
+    import io
+    try:
+        pil_img = PILImage.open(io.BytesIO(data))
+        pil_img = PILImage.ImageOps.exif_transpose(pil_img) or pil_img
+        img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    except Exception:
+        arr = np.frombuffer(data, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Unsupported or corrupt image")
     return _resize_if_large(img)
