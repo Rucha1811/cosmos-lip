@@ -87,6 +87,91 @@ async function testTransactionLead(req, res, next) {
   }
 }
 
+async function testFullPipelineTx(req, res, next) {
+  try {
+    const upload = await prisma.upload.findFirst({
+      where: { status: "READY_FOR_REVIEW" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!upload) return res.status(400).json({ error: "No upload found" });
+
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        // Step 1: Create a test card
+        const card = await tx.card.create({
+          data: {
+            uploadId: upload.id,
+            pageIndex: 0,
+            cardIndex: 99,
+            croppedPath: "",
+            bbox: { x: 0, y: 0, w: 100, h: 100 },
+          },
+        });
+
+        // Step 2: Create OCR result
+        await tx.ocrResult.create({
+          data: {
+            cardId: card.id,
+            chosenEngine: "TESSERACT",
+            rawText: "Test Company\nContact: John Doe\njohn@test.com",
+            confidence: 0.9,
+            engineResults: {},
+          },
+        });
+
+        // Step 3: Upsert company
+        const company = await tx.company.upsert({
+          where: { normalizedKey: "test-full-pipeline::test.com" },
+          create: {
+            name: "Test Full Pipeline",
+            normalizedKey: "test-full-pipeline::test.com",
+          },
+          update: {},
+        });
+
+        // Step 4: Create lead WITH contacts nested create
+        const lead = await tx.lead.create({
+          data: {
+            cardId: card.id,
+            companyId: company.id,
+            companyName: "Test Full Pipeline",
+            email: "john@test.com",
+            status: "PENDING_REVIEW",
+            contacts: {
+              create: [
+                {
+                  fullName: "John Doe",
+                  designation: "Manager",
+                  isPrimary: true,
+                },
+              ],
+            },
+          },
+        });
+
+        return { card, company, lead };
+      });
+
+      res.json({
+        message: "Full pipeline transaction succeeded",
+        card: { id: result.card.id },
+        company: { id: result.company.id, name: result.company.name },
+        lead: { id: result.lead.id, email: result.lead.email },
+      });
+    } catch (txErr) {
+      res.status(500).json({
+        error: "Transaction failed",
+        message: txErr.message,
+        code: txErr.code,
+        stack: txErr.stack?.split("\n").slice(0, 8).join("\n"),
+      });
+    }
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function dbStats(req, res, next) {
   try {
     const [uploads, cards, ocrResults, leads, companies, contacts, users] =
@@ -139,4 +224,4 @@ async function dbStats(req, res, next) {
   }
 }
 
-module.exports = { dbStats, createTestLead, testTransactionLead };
+module.exports = { dbStats, createTestLead, testTransactionLead, testFullPipelineTx };

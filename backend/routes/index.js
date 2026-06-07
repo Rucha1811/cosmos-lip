@@ -51,6 +51,7 @@ router.post("/uploads/:id/reprocess", upload.reprocessUpload);
 router.get("/debug", debug.dbStats);
 router.get("/debug/test-lead", debug.createTestLead);
 router.get("/debug/test-tx-lead", debug.testTransactionLead);
+router.get("/debug/test-full-tx", debug.testFullPipelineTx);
 
 // Everything below requires a valid token.
 router.use(authenticate);
