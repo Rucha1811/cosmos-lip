@@ -151,6 +151,6 @@ def prepare_for_ocr(crop: np.ndarray) -> dict[str, np.ndarray]:
         "deskewed": deskewed,
         "rotation": angle,
         "paddle_input": enhanced,     # grayscale, contrast-normalised
-        "tesseract_input": binary,    # binarised
+        "tesseract_input": enhanced,  # grayscale — binarization destroys small text
         "quality": quality_score(deskewed),
     }
