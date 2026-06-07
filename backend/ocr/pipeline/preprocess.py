@@ -136,6 +136,12 @@ def quality_score(img: np.ndarray) -> float:
     return round(0.5 * sharp_n + 0.3 * contrast_n + 0.2 * exposure_n, 4)
 
 
+def sharpen(gray: np.ndarray) -> np.ndarray:
+    """Sharpen the image to improve text edge definition for OCR."""
+    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    return cv2.filter2D(gray, -1, kernel)
+
+
 def prepare_for_ocr(crop: np.ndarray) -> dict[str, np.ndarray]:
     """Produce engine-specific variants of a single cropped card.
 
@@ -145,8 +151,8 @@ def prepare_for_ocr(crop: np.ndarray) -> dict[str, np.ndarray]:
     deskewed, angle = deskew(crop)
     gray = to_gray(deskewed)
     gray = denoise(gray)
+    gray = sharpen(gray)
     enhanced = apply_clahe(gray)
-    binary = adaptive_threshold(enhanced)
     return {
         "deskewed": deskewed,
         "rotation": angle,

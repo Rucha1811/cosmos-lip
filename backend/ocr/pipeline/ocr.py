@@ -103,7 +103,7 @@ def _tesseract_ocr(image: np.ndarray) -> dict:
             "available": False,
         }
     try:
-        config = "--psm 3 --oem 1 --dpi 300"
+        config = "--psm 3 --oem 1"
         data = pytesseract.image_to_data(image, config=config, output_type=Output.DICT)
         lines, confs = [], []
         for i, word in enumerate(data["text"]):
